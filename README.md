@@ -11,6 +11,16 @@ Upload a Verizon bill PDF and get what each person owes.
 
 Open `index.html` in a browser (or host the folder, e.g. with GitHub Pages) and choose your bill PDF. Click any person to see their line-by-line charges, and use **Copy summary** to paste the totals into a group chat.
 
+## Hosting on GitHub Pages
+
+`.github/workflows/pages.yml` publishes `index.html` and `billparser.js` on every push. To turn it on:
+
+1. Make the repository public (Settings → General → Danger Zone → Change visibility), unless your GitHub plan includes Pages for private repositories. No bill data is stored in the repo; `*.pdf` is ignored.
+2. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+3. Re-run the "Deploy to GitHub Pages" workflow from the Actions tab (or push a commit).
+
+The site will be at `https://lsands65.github.io/verizonbill/`.
+
 ## Command line
 
 ```sh
