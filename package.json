@@ -1,0 +1,12 @@
+{
+  "name": "verizonbill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Split a Verizon bill PDF into what each person owes",
+  "scripts": {
+    "split": "node scripts/split.mjs"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}

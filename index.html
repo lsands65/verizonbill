@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone Bill Splitter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow ledger column — drop the bill, read a per-person statement underneath. */
+:root {
+  --paper: #f2f4f6;
+  --sheet: #ffffff;
+  --ink: #18212b;
+  --muted: #5b6673;
+  --rule: #d9dee4;
+  --accent: #0d5f5b;
+  --accent-soft: #e1efed;
+  --good: #23704a;
+  --good-soft: #e3f1e9;
+  --bad: #a8401c;
+  --bad-soft: #f8e7e0;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #11161c; --sheet: #182029; --ink: #e6ebf0; --muted: #98a3b0; --rule: #2a3440;
+    --accent: #5cc2ba; --accent-soft: #163331; --good: #6fcf9a; --good-soft: #153022;
+    --bad: #f08a66; --bad-soft: #3a2118; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #11161c; --sheet: #182029; --ink: #e6ebf0; --muted: #98a3b0; --rule: #2a3440;
+  --accent: #5cc2ba; --accent-soft: #163331; --good: #6fcf9a; --good-soft: #153022;
+  --bad: #f08a66; --bad-soft: #3a2118; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+}
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 24px;
+}
+h1 {
+  font: 700 clamp(28px, 6vw, 40px)/1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+
+.drop {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  text-align: center;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  cursor: pointer;
+  transition: background .15s;
+}
+.drop:hover, .drop.over { background: color-mix(in srgb, var(--accent) 18%, var(--sheet)); }
+.drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drop strong { font: 600 17px/1.3 var(--font-display); color: var(--accent); }
+.drop span { color: var(--muted); font-size: 13px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.status { margin: 0; font-size: 14px; color: var(--muted); min-height: 1.5em; }
+.status.error { color: var(--bad); }
+
+.sheet {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.sheet-head h2 { margin: 0; font: 600 18px/1.3 var(--font-display); }
+.meta { color: var(--muted); font-size: 13px; }
+.example-tag {
+  font: 500 11px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 20px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--rule);
+}
+.check.ok { background: var(--good-soft); color: var(--good); }
+.check.fail { background: var(--bad-soft); color: var(--bad); }
+.check b { font-weight: 600; }
+
+.cols, .person > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 88px 104px;
+  gap: 12px;
+  align-items: baseline;
+  padding: 12px 20px;
+}
+.cols {
+  padding-block: 8px;
+  font: 500 11px/1.4 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--rule);
+}
+.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.person { border-bottom: 1px solid var(--rule); }
+.person > summary { cursor: pointer; list-style: none; }
+.person > summary::-webkit-details-marker { display: none; }
+.person > summary:hover { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
+.person > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.who { display: grid; gap: 2px; min-width: 0; }
+.who b { font-weight: 600; }
+.who .phone { font: 13px var(--font-mono); color: var(--muted); }
+.who .chip {
+  justify-self: start;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.owes { font-weight: 600; font-size: 16px; }
+.person > summary .caret { display: inline-block; transition: transform .15s; color: var(--muted); margin-right: 6px; font-size: 11px; }
+.person[open] > summary .caret { transform: rotate(90deg); }
+
+.breakdown { padding: 4px 20px 16px 38px; display: grid; gap: 14px; }
+.line-block { display: grid; gap: 2px; }
+.line-title { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; font-size: 14px; }
+.line-title small { font-weight: 400; color: var(--muted); }
+.item { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); }
+.item.cat { color: var(--ink); font-weight: 500; margin-top: 4px; }
+.item .num { flex: none; }
+
+.foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 12px;
+  padding: 14px 20px;
+  font-weight: 600;
+}
+.foot .num { font-size: 17px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button {
+  font: 500 14px var(--font-body);
+  color: var(--sheet);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.copied { font-size: 13px; color: var(--good); }
+#copyFallback { width: 100%; min-height: 160px; font: 13px var(--font-mono); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; }
+
+.notes { color: var(--muted); font-size: 13px; margin: 0; max-width: 65ch; }
+
+@media (max-width: 560px) {
+  .cols { display: none; }
+  .person > summary { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .person > summary .lineamt, .person > summary .shareamt { display: none; }
+  .breakdown { padding-left: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>Phone Bill Splitter</h1>
+    <p class="lede">Drop in your Verizon bill PDF to see what each person owes. Lines that share a phone number (like a watch on Number Share) are combined, and account-wide charges are split evenly between numbers.</p>
+  </header>
+
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="application/pdf,.pdf">
+    <strong>Choose your bill PDF</strong>
+    <span>or drag it here · it's read in your browser and never uploaded</span>
+  </label>
+  <p class="status" id="status" role="status"></p>
+
+  <section class="sheet" id="sheet" aria-live="polite"></section>
+
+  <div class="actions">
+    <button type="button" id="copy">Copy summary</button>
+    <span class="copied" id="copied" hidden>Copied</span>
+  </div>
+  <textarea id="copyFallback" readonly hidden aria-label="Summary text"></textarea>
+
+  <p class="notes">Account-wide charges are divided by the number of distinct phone numbers. When they don't divide evenly to the cent, the first numbers listed pay one extra cent so the shares add up to the bill exactly. Any balance carried over from a previous bill is not included.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="billparser.js"></script>
+<script>
+(function () {
+  const { extractPages, parseBill, splitBill, formatCents } = window.BillParser;
+  // The worker script above registers itself globally, so pdf.js runs it on the page
+  // instead of spawning a cross-origin worker.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const CATEGORY = /^(Plan|Devices|Surcharges|Taxes & gov fees|Products & plan perks|One-time charges|Usage and purchase charges|Purchases from other vendors|Credits|Adjustments)$/i;
+  let summaryText = '';
+
+  // Clearly fictional sample shown before a bill is loaded.
+  const SAMPLE = {
+    meta: { period: 'Example billing period', monthCharges: 21500, previousBalance: 0 },
+    accountWide: 2000,
+    accountWideItems: [{ label: 'Device protection', amount: 2000 }],
+    lines: [
+      { name: 'Alex Example', device: 'Phone', phone: '555-010-0001', note: '', total: 6050,
+        items: [{ label: 'Plan', amount: 4500 }, { label: 'Devices', amount: 800 }, { label: 'Surcharges', amount: 520 }, { label: 'Taxes & gov fees', amount: 230 }] },
+      { name: "Alex's Watch", device: 'Smartwatch', phone: '555-010-0001', note: 'Number Share', total: 1345,
+        items: [{ label: 'Plan', amount: 750 }, { label: 'Surcharges', amount: 478 }, { label: 'Taxes & gov fees', amount: 117 }] },
+      { name: 'Sam Example', device: 'Phone', phone: '555-010-0002', note: '', total: 5600,
+        items: [{ label: 'Plan', amount: 4500 }, { label: 'Surcharges', amount: 520 }, { label: 'Taxes & gov fees', amount: 580 }] },
+      { name: 'Jordan Example', device: 'Phone', phone: '555-010-0003', note: '', total: 6505,
+        items: [{ label: 'Plan', amount: 4500 }, { label: 'Devices', amount: 1222 }, { label: 'Surcharges', amount: 516 }, { label: 'Taxes & gov fees', amount: 267 }] },
+    ],
+  };
+
+  function render(parsed, isExample) {
+    const result = splitBill(parsed);
+    const { meta } = parsed;
+    const ways = result.groups.length;
+    const sumOwed = result.groups.reduce((s, g) => s + g.total, 0);
+
+    let html = `<div class="sheet-head">
+      <div><h2>${isExample ? 'How it looks' : 'Who owes what'}</h2>
+      <div class="meta">${esc(meta.period || '')}${meta.account ? ' · Account ' + esc(meta.account) : ''}</div></div>
+      ${isExample ? '<span class="example-tag">Example data</span>' : ''}
+    </div>`;
+
+    if (!isExample) {
+      const checks = result.checks.map((c) => `<p class="check ${c.ok ? 'ok' : 'fail'}"><b>${c.ok ? '✓ Matches the bill' : '✕ Check this bill'}</b><span>${esc(c.text)}</span></p>`).join('');
+      html += checks;
+      if (meta.previousBalance) {
+        html += `<p class="check fail"><b>Note</b><span>This bill also carries ${formatCents(meta.previousBalance)} from the previous bill, which isn't split here.</span></p>`;
+      }
+    }
+
+    html += `<div class="cols"><span>Person · number</span><span class="num">Line charges</span><span class="num">Shared</span><span class="num">Owes</span></div>`;
+    for (const g of result.groups) {
+      const combined = g.lines.length > 1 ? `<span class="chip">${g.lines.length} lines combined</span>` : '';
+      const blocks = g.lines.map((l) => `
+        <div class="line-block">
+          <div class="line-title"><span>${esc(l.name)} <small>${esc(l.device)}${l.note ? ' · ' + esc(l.note) : ''}</small></span><span class="num">${formatCents(l.total)}</span></div>
+          ${l.items.map((it) => `<div class="item${CATEGORY.test(it.label) ? ' cat' : ''}"><span>${esc(it.label)}</span><span class="num">${formatCents(it.amount)}</span></div>`).join('')}
+        </div>`).join('');
+      html += `<details class="person">
+        <summary>
+          <span class="who"><b><span class="caret" aria-hidden="true">▶</span>${esc(g.name)}</b><span class="phone">${esc(g.phone)}</span>${combined}</span>
+          <span class="num lineamt">${formatCents(g.lineTotal)}</span>
+          <span class="num shareamt">+${formatCents(g.accountShare)}</span>
+          <span class="num owes">${formatCents(g.total)}</span>
+        </summary>
+        <div class="breakdown">
+          ${blocks}
+          <div class="line-block">
+            <div class="line-title"><span>Share of account-wide charges <small>${formatCents(result.accountWide)} ÷ ${ways}</small></span><span class="num">${formatCents(g.accountShare)}</span></div>
+            ${parsed.accountWideItems.filter((it) => !CATEGORY.test(it.label)).map((it) => `<div class="item"><span>${esc(it.label)}</span><span class="num">${formatCents(it.amount)}</span></div>`).join('')}
+          </div>
+        </div>
+      </details>`;
+    }
+    html += `<div class="foot"><span>Total</span><span class="num">${formatCents(sumOwed)}</span></div>`;
+    $('sheet').innerHTML = html;
+
+    summaryText = [
+      `Phone bill${meta.period ? ' — ' + meta.period : ''}`,
+      `Shared account charges ${formatCents(result.accountWide)} split ${ways} ways`,
+      '',
+      ...result.groups.map((g) => {
+        const extra = g.lines.length > 1 ? ` (${g.lines.map((l) => l.name).join(' + ')})` : '';
+        return `${g.name} ${g.phone}${extra}: ${formatCents(g.total)}`;
+      }),
+      '',
+      `Total: ${formatCents(sumOwed)}`,
+    ].join('\n');
+    return result;
+  }
+
+  async function load(file) {
+    const status = $('status');
+    status.classList.remove('error');
+    if (!file) return;
+    if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) {
+      status.textContent = `${file.name} isn't a PDF. Download the bill from My Verizon as a PDF and choose that file.`;
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = `Reading ${file.name}…`;
+    try {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const doc = await pdfjsLib.getDocument({ data }).promise;
+      const parsed = parseBill(await extractPages(doc));
+      if (!parsed.lines.length) {
+        status.textContent = `No phone lines were found in ${file.name}. Make sure it's the full Verizon bill, including the "Charges by line details" pages.`;
+        status.classList.add('error');
+        return;
+      }
+      const result = render(parsed, false);
+      status.textContent = `${file.name}: ${parsed.lines.length} lines, ${result.groups.length} phone numbers.`;
+    } catch (err) {
+      console.error(err);
+      status.textContent = `Couldn't read ${file.name}. If the PDF is password-protected, download an unprotected copy and try again.`;
+      status.classList.add('error');
+    }
+  }
+
+  $('file').addEventListener('change', (e) => load(e.target.files[0]));
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => load(e.dataTransfer.files[0]));
+
+  $('copy').addEventListener('click', () => {
+    const done = () => { $('copied').hidden = false; setTimeout(() => { $('copied').hidden = true; }, 1800); };
+    const fallback = () => { const t = $('copyFallback'); t.value = summaryText; t.hidden = false; t.focus(); t.select(); };
+    try {
+      navigator.clipboard.writeText(summaryText).then(done, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  render(SAMPLE, true);
+})();
+</script>
+</body>
+</html>
